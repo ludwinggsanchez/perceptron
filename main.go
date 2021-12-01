@@ -84,12 +84,26 @@ func activate(linearCombination float64) float64 {
 }
 
 func (p *Perceptron) predict(x []float64) float64 {
-	var linearCombination float64
-	for i := 0; i < len(x); i++ {
-		linearCombination += x[i] * p.weights[i]
-	}
-	return linearCombination
-	// return activate(linearCombination)
+	w := mat.NewDense(1, len(p.weights), p.weights)
+	xx := mat.NewDense(1, len(x), x)
+
+	var c mat.Dense
+	c.Mul(w, xx.T())
+	return c.RawMatrix().Data[0]
+}
+
+func (p *Perceptron) update(x []float64, y float64) {
+	w := mat.NewDense(1, len(p.weights), p.weights)
+	xx := mat.NewDense(1, len(x), x)
+
+	var xy mat.Dense
+	xy.Scale(y, xx)
+
+	var c mat.Dense
+	c.Add(w, &xy)
+	p.weights = c.RawMatrix().Data
+
+	return
 }
 
 func (p *Perceptron) fit(X [][]float64, Y []float64) {
@@ -121,10 +135,9 @@ func (p *Perceptron) fit(X [][]float64, Y []float64) {
 				strconv.FormatBool(y_pred*Y[i] < 0),
 			}
 			if y_pred*Y[i] < 0 {
-				p.weights[0] += X[i][0] * Y[i]
-				p.weights[1] += X[i][1] * Y[i]
-				p.weights[2] += X[i][2] * Y[i]
 				error += 1
+				p.update(X[i], Y[i])
+
 				row = append(row, fmt.Sprintf("%.4f", p.weights[0]))
 				row = append(row, fmt.Sprintf("%.4f", p.weights[1]))
 				row = append(row, fmt.Sprintf("%.4f", p.weights[2]))
@@ -155,24 +168,5 @@ func (p *Perceptron) fit(X [][]float64, Y []float64) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// m = =-((F2/H2)/(F2/G2))
-	// b = =-F2/H2
-
-	a := mat.NewDense(2, 2, []float64{
-		4, 0,
-		0, 4,
-	})
-	b := mat.NewDense(2, 3, []float64{
-		4, 0, 0,
-		0, 0, 4,
-	})
-
-	// Take the matrix product of a and b and place the result in c.
-	var c mat.Dense
-	c.Mul(a, b)
-
-	// Print the result using the formatter.
-	fc := mat.Formatted(&c, mat.Prefix("    "), mat.Squeeze())
-	fmt.Printf("c = %v", fc)
 
 }
