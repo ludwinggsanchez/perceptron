@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/astaxie/beego/logs"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -64,7 +63,7 @@ func main() {
 	}
 	rand.Seed(time.Now().UnixNano())
 	//training
-	perceptron := Perceptron{0.02, []float64{}, 3}
+	perceptron := Perceptron{0.02, []float64{}, 1}
 	perceptron.fit(X, Y)
 
 }
@@ -108,52 +107,89 @@ func (p *Perceptron) update(x []float64, y float64) {
 
 func (p *Perceptron) fit(X [][]float64, Y []float64) {
 	//initialize the weights
-	p.weights = []float64{}
-	for range X[0] {
-		p.weights = append(p.weights, rand.NormFloat64())
-	}
 
 	data := [][]string{}
 	data = append(data, []string{
 		"iteración", "x0", "x1", "x2", "y", "w0", "w1", "w2", "y'", "update?", "w0'", "w1'", "w2'", "m", "b",
 	})
 	//update weights by data
+	error := 0
+	C1Count := 0
+	C2Count := 0
+	vP := 0
+	vN := 0
+	fP := 0
+	fN := 0
+	C1Out := 0
+	C2Out := 0
+	p.weights = []float64{}
+	for range X[0] {
+		p.weights = append(p.weights, rand.NormFloat64())
+	}
+
 	for iter := 0; iter < p.iterNum; iter++ {
-		error := 0
 		for i := 0; i < len(X); i++ {
 			y_pred := p.predict(X[i])
-			row := []string{
-				fmt.Sprintf("%.0f", float64(i)),
-				fmt.Sprintf("%.4f", X[i][0]),
-				fmt.Sprintf("%.4f", X[i][1]),
-				fmt.Sprintf("%.4f", X[i][2]),
-				fmt.Sprintf("%.4f", Y[i]),
-				fmt.Sprintf("%.4f", p.weights[0]),
-				fmt.Sprintf("%.4f", p.weights[1]),
-				fmt.Sprintf("%.4f", p.weights[2]),
-				fmt.Sprintf("%.4f", activate(y_pred)),
-				strconv.FormatBool(y_pred*Y[i] < 0),
-			}
-			if y_pred*Y[i] < 0 {
-				error += 1
-				p.update(X[i], Y[i])
+			if i < int(float64(len(X))*float64(0.7)) {
+				row := []string{
+					fmt.Sprintf("%.0f", float64(i)),
+					fmt.Sprintf("%.4f", X[i][0]),
+					fmt.Sprintf("%.4f", X[i][1]),
+					fmt.Sprintf("%.4f", X[i][2]),
+					fmt.Sprintf("%.4f", Y[i]),
+					fmt.Sprintf("%.4f", p.weights[0]),
+					fmt.Sprintf("%.4f", p.weights[1]),
+					fmt.Sprintf("%.4f", p.weights[2]),
+					fmt.Sprintf("%.4f", activate(y_pred)),
+					strconv.FormatBool(y_pred*Y[i] < 0),
+				}
+				if y_pred*Y[i] < 0 {
+					error += 1
+					p.update(X[i], Y[i])
 
-				row = append(row, fmt.Sprintf("%.4f", p.weights[0]))
-				row = append(row, fmt.Sprintf("%.4f", p.weights[1]))
-				row = append(row, fmt.Sprintf("%.4f", p.weights[2]))
+					row = append(row, fmt.Sprintf("%.4f", p.weights[0]))
+					row = append(row, fmt.Sprintf("%.4f", p.weights[1]))
+					row = append(row, fmt.Sprintf("%.4f", p.weights[2]))
+				} else {
+					row = append(row, "")
+					row = append(row, "")
+					row = append(row, "")
+				}
+				m := -(p.weights[0] / p.weights[2]) / (p.weights[0] / p.weights[1])
+				b := -p.weights[0] / p.weights[2]
+				row = append(row, fmt.Sprintf("%.4f", m))
+				row = append(row, fmt.Sprintf("%.4f", b))
+				data = append(data, row)
 			} else {
-				row = append(row, "")
-				row = append(row, "")
-				row = append(row, "")
+				if Y[i] > 0 {
+					C1Count++
+				} else {
+					C2Count++
+				}
+
+				if y_pred > 0 {
+					C1Out++
+				} else {
+					C2Out++
+				}
+
+				if y_pred*Y[i] < 0 {
+					if y_pred > 0 {
+						fP++
+					} else {
+						fN++
+					}
+				} else {
+					if Y[i] > 0 {
+						vP++
+					} else {
+						vN++
+					}
+				}
 			}
-			m := -(p.weights[0] / p.weights[2]) / (p.weights[0] / p.weights[1])
-			b := -p.weights[0] / p.weights[2]
-			row = append(row, fmt.Sprintf("%.4f", m))
-			row = append(row, fmt.Sprintf("%.4f", b))
-			data = append(data, row)
 		}
-		logs.Info(p.weights, float64(error)/float64(len(Y)), iter)
 	}
+	fmt.Println(C1Count, C2Count, C1Out, C2Out, "vP:", vP, "fP:", fP, "vN:", vN, "fN:", fN)
 
 	f, err := os.Create("results.csv")
 	defer f.Close()
@@ -163,7 +199,7 @@ func (p *Perceptron) fit(X [][]float64, Y []float64) {
 	}
 
 	w := csv.NewWriter(f)
-	err = w.WriteAll(data) // calls Flush internally
+	err = w.WriteAll(data)
 
 	if err != nil {
 		log.Fatal(err)
